@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZAGREO - Simulatore Conto Termico 3.0</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel Standalone for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .pulse-animation {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        /* Floating button */
+        .floating-btn {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .floating-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .chat-sidebar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 400px;
+            height: 100vh;
+            background: white;
+            box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+        }
+
+        @media (max-width: 640px) {
+            .chat-sidebar {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Brand Colors
+        const NAVY = "#0B1B3D";
+        const GOLD = "#E0A348";
+
+        // Utility function for formatting currency
+        const fmt = (value) => {
+            return new Intl.NumberFormat('it-IT', {
+                style: 'currency',
+                currency: 'EUR',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(value);
+        };
+
+        // Lucide Icon Component Wrapper
+        const Icon = ({ name, size = 24, color = "currentColor", className = "" }) => {
+            const ref = useRef(null);
+
+            useEffect(() => {
+                if (ref.current && window.lucide) {
+                    // Clear previous content
+                    ref.current.innerHTML = "";
+
+                    // Create a temporary element to be replaced by lucide
+                    const i = document.createElement("i");
+                    i.setAttribute("data-lucide", name);
+                    ref.current.appendChild(i);
+
+                    window.lucide.createIcons({
+                        elements: [i],
+                        attrs: {
+                            width: size,
+                            height: size,
+                            stroke: color,
+                            "stroke-width": 2
+                        }
+                    });
+                }
+            }, [name, size, color]);
+
+            return (
+                <span
+                    ref={ref}
+                    className={`inline-flex items-center justify-center ${className}`}
+                    style={{ width: size, height: size }}
+                />
+            );
+        };
+
+        // ZAGREO Logo Component
+        const ZagreoLogo = ({ size = 40 }) => (
+            <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+                <rect x="10" y="30" width="50" height="50" fill={NAVY} rx="4" />
+                <rect x="40" y="20" width="50" height="50" fill={GOLD} rx="4" />
+            </svg>
+        );
+
+        // Card Components
+        const Card = ({ children, className = "", style = {} }) => (
+            <div className={`bg-white rounded-lg shadow-md ${className}`} style={style}>
+                {children}
+            </div>
+        );
+
+        const CardHeader = ({ children, className = "" }) => (
+            <div className={`p-6 ${className}`}>{children}</div>
+        );
+
+        const CardTitle = ({ children, className = "" }) => (
+            <h3 className={`text-xl font-semibold ${className}`}>{children}</h3>
+        );
+
+        const CardContent = ({ children, className = "" }) => (
+            <div className={`p-6 pt-0 ${className}`}>{children}</div>
+        );
+
+        // Badge Component
+        const Badge = ({ children, className = "" }) => (
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${className}`}>
+                {children}
+            </span>
+        );
+
+        // Button Component
+        const Button = ({ children, onClick, className = "", style = {} }) => (
+            <button
+                onClick={onClick}
+                className={`px-6 py-3 rounded-lg font-semibold transition-all hover:opacity-90 ${className}`}
+                style={style}
+            >
+                {children}
+            </button>
+        );
+
+        // Slider Component
+        const Slider = ({ value, onChange, min, max, step, className = "" }) => (
+            <input
+                type="range"
+                value={value}
+                onChange={(e) => onChange(Number(e.target.value))}
+                min={min}
+                max={max}
+                step={step}
+                className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer ${className}`}
+                style={{
+                    accentColor: GOLD
+                }}
+            />
+        );
+
+        // Select Component
+        const Select = ({ value, onChange, options, placeholder, className = "" }) => (
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-opacity-50 ${className}`}
+                style={{ focusRingColor: GOLD }}
+            >
+                <option value="">{placeholder}</option>
+                {options.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                    </option>
+                ))}
+            </select>
+        );
+
+        // Accordion Component
+        const Accordion = ({ children }) => <div className="space-y-2">{children}</div>;
+
+        const AccordionItem = ({ title, children, defaultOpen = false }) => {
+            const [isOpen, setIsOpen] = useState(defaultOpen);
+
+            return (
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <button
+                        onClick={() => setIsOpen(!isOpen)}
+                        className="w-full px-6 py-4 text-left bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
+                    >
+                        <span className="font-semibold">{title}</span>
+                        <Icon name={isOpen ? "chevron-up" : "chevron-down"} size={20} />
+                    </button>
+                    {isOpen && (
+                        <div className="p-6 bg-white">
+                            {children}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Tabs Component
+        const Tabs = ({ defaultValue, children }) => {
+            const [activeTab, setActiveTab] = useState(defaultValue);
+
+            return (
+                <div>
+                    {React.Children.map(children, child =>
+                        React.cloneElement(child, { activeTab, setActiveTab })
+                    )}
+                </div>
+            );
+        };
+
+        const TabsList = ({ children, activeTab, setActiveTab }) => (
+            <div className="flex space-x-2 border-b border-gray-200 mb-4">
+                {React.Children.map(children, child =>
+                    React.cloneElement(child, { activeTab, setActiveTab })
+                )}
+            </div>
+        );
+
+        const TabsTrigger = ({ value, children, activeTab, setActiveTab }) => (
+            <button
+                onClick={() => setActiveTab(value)}
+                className={`px-4 py-2 font-medium transition-colors border-b-2 ${activeTab === value
+                    ? 'border-current'
+                    : 'border-transparent hover:border-gray-300'
+                    }`}
+                style={{
+                    color: activeTab === value ? GOLD : '#666',
+                    borderBottomColor: activeTab === value ? GOLD : 'transparent'
+                }}
+            >
+                {children}
+            </button>
+        );
+
+        const TabsContent = ({ value, children, activeTab }) =>
+            activeTab === value ? <div>{children}</div> : null;
+
+        // Floating Chat Widget Component
+        const FloatingChatWidget = () => {
+            const [isOpen, setIsOpen] = useState(false);
+            const [messages, setMessages] = useState([
+                {
+                    role: 'assistant',
+                    content: '👋 Ciao! Sono l\'assistente normativo ZAGREO. Posso aiutarti a consultare i documenti ufficiali del Conto Termico 3.0. Fammi una domanda!'
+                }
+            ]);
+            const [input, setInput] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const messagesEndRef = useRef(null);
+
+            const scrollToBottom = () => {
+                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            };
+
+            useEffect(() => {
+                scrollToBottom();
+            }, [messages]);
+
+            const handleSend = async () => {
+                if (!input.trim()) return;
+
+                const userMessage = { role: 'user', content: input };
+                setMessages(prev => [...prev, userMessage]);
+                setInput('');
+                setIsLoading(true);
+
+                try {
+                    const response = await fetch('https://36d0-151-74-210-160.ngrok-free.app', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ question: input })
+                    });
+
+                    if (!response.ok) throw new Error('Errore del server');
+
+                    const data = await response.json();
+
+                    const assistantMessage = {
+                        role: 'assistant',
+                        content: data.answer + (data.sources?.length > 0
+                            ? `\n\n📚 **Fonti**: ${data.sources.join(', ')}`
+                            : '')
+                    };
+
+                    setMessages(prev => [...prev, assistantMessage]);
+                } catch (error) {
+                    console.error('Error:', error);
+                    setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: '❌ Si è verificato un errore. Riprova.'
+                    }]);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const handleKeyPress = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                }
+            };
+
+            return (
+                <>
+                    {/* Floating Button */}
+                    {!isOpen && (
+                        <div
+                            className="floating-btn fade-in"
+                            style={{ backgroundColor: NAVY }}
+                            onClick={() => setIsOpen(true)}
+                        >
+                            <Icon name="message-circle" size={28} color="white" />
+                            <div
+                                className="absolute -top-1 -right-1 w-4 h-4 rounded-full pulse-animation"
+                                style={{ backgroundColor: GOLD }}
+                            />
+                        </div>
+                    )}
+
+                    {/* Chat Sidebar */}
+                    {isOpen && (
+                        <div className="chat-sidebar slide-in">
+                            {/* Header */}
+                            <div
+                                className="px-6 py-4 flex items-center justify-between"
+                                style={{ backgroundColor: NAVY, color: 'white' }}
+                            >
+                                <div className="flex items-center space-x-3">
+                                    <ZagreoLogo size={32} />
+                                    <div>
+                                        <h3 className="font-bold text-lg">Consultazione Normativa</h3>
+                                        <p className="text-xs opacity-80">Powered by NotebookLM</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setIsOpen(false)}
+                                    className="hover:opacity-80 transition-opacity"
+                                >
+                                    <Icon name="x" size={24} color="white" />
+                                </button>
+                            </div>
+
+                            {/* Messages */}
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                                {messages.map((msg, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                                    >
+                                        <div
+                                            className={`max-w-[80%] px-4 py-3 rounded-lg ${msg.role === 'user'
+                                                ? 'text-white'
+                                                : 'bg-white border border-gray-200'
+                                                }`}
+                                            style={{
+                                                backgroundColor: msg.role === 'user' ? NAVY : undefined
+                                            }}
+                                        >
+                                            {msg.content.split('\n').map((line, i) => (
+                                                <p key={i} className={i > 0 ? 'mt-2' : ''}>
+                                                    {line}
+                                                </p>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {isLoading && (
+                                    <div className="flex justify-start">
+                                        <div className="bg-white border border-gray-200 px-4 py-3 rounded-lg">
+                                            <div className="flex space-x-2">
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div ref={messagesEndRef} />
+                            </div>
+
+                            {/* Input */}
+                            <div className="p-4 bg-white border-t border-gray-200">
+                                <div className="flex space-x-2">
+                                    <input
+                                        type="text"
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        onKeyPress={handleKeyPress}
+                                        placeholder="Chiedi info sul Conto Termico 3.0..."
+                                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2"
+                                        style={{ focusRingColor: GOLD }}
+                                        disabled={isLoading}
+                                    />
+                                    <button
+                                        onClick={handleSend}
+                                        disabled={isLoading || !input.trim()}
+                                        className="px-4 py-3 rounded-lg text-white font-semibold transition-opacity disabled:opacity-50"
+                                        style={{ backgroundColor: NAVY }}
+                                    >
+                                        <Icon name="send" size={20} color="white" />
+                                    </button>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    💡 Premi Invio per inviare
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </>
+            );
+        };
+
+        // Main App Component
+        const App = () => {
+            // Simulator State
+            const [tipoEnte, setTipoEnte] = useState("");
+            const [tipoIntervento, setTipoIntervento] = useState("");
+            const [spesa, setSpesa] = useState(250000);
+
+            // Derived calculations
+            const aliquota =
+                tipoEnte === "comune_small" || tipoEnte === "scuola_sanita" ? 1.0 :
+                    tipoEnte === "comune_big" ? 0.65 : 0;
+
+            const acconto = tipoIntervento === "piccolo" ? 0.5 : 0.4;
+            const durata = tipoIntervento === "piccolo" ? 2 : 5;
+
+            const incentivoTotale = spesa * aliquota;
+            const liquiditaImmediata = incentivoTotale * acconto;
+            const esborsoNetto = spesa - incentivoTotale;
+
+            const ready = tipoEnte !== "" && tipoIntervento !== "";
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header
+                        className="sticky top-0 z-50 shadow-md"
+                        style={{ backgroundColor: NAVY }}
+                    >
+                        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                                <ZagreoLogo size={48} />
+                                <div>
+                                    <h1 className="text-2xl font-bold text-white">ZAGREO</h1>
+                                    <p className="text-sm" style={{ color: GOLD }}>
+                                        Efficienza Energetica PA
+                                    </p>
+                                </div>
+                            </div>
+                            <Badge
+                                className="text-white border-2"
+                                style={{
+                                    backgroundColor: NAVY,
+                                    borderColor: GOLD,
+                                    color: GOLD
+                                }}
+                            >
+                                D.M. 7 agosto 2025
+                            </Badge>
+                        </div>
+                    </header>
+
+                    {/* Hero Section */}
+                    <section
+                        className="relative py-20 text-white"
+                        style={{
+                            background: `linear-gradient(135deg, ${NAVY} 0%, #1a2f5a 100%)`
+                        }}
+                    >
+                        <div className="max-w-7xl mx-auto px-4 text-center">
+                            <h2 className="text-5xl font-bold mb-4">
+                                Conto Termico 3.0
+                            </h2>
+                            <p className="text-xl mb-2 opacity-90">
+                                Simulatore di Impatto Finanziario per Enti Locali
+                            </p>
+                            <p className="text-lg opacity-75 max-w-3xl mx-auto">
+                                Calcola in tempo reale gli incentivi GSE per i tuoi interventi di efficienza energetica
+                            </p>
+
+                            <div className="grid md:grid-cols-2 gap-6 mt-12 max-w-4xl mx-auto">
+                                <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-6">
+                                    <div className="flex items-center justify-center mb-3">
+                                        <Icon name="shield-check" size={32} color={GOLD} />
+                                    </div>
+                                    <h3 className="font-bold text-lg mb-2" style={{ color: GOLD }}>
+                                        100% Fondo Perduto
+                                    </h3>
+                                    <p className="text-sm opacity-90">
+                                        Incentivi a fondo perduto fino al 100% per Comuni sotto 15k abitanti e Scuole/Sanità
+                                    </p>
+                                </div>
+
+                                <div className="bg-white bg-opacity-10 backdrop-blur-sm rounded-lg p-6">
+                                    <div className="flex items-center justify-center mb-3">
+                                        <Icon name="zap" size={32} color={GOLD} />
+                                    </div>
+                                    <h3 className="font-bold text-lg mb-2" style={{ color: GOLD }}>
+                                        Acconto fino al 50%
+                                    </h3>
+                                    <p className="text-sm opacity-90">
+                                        Liquidità immediata con acconto GSE erogato a fine lavori
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Decorative strip */}
+                        <div
+                            className="absolute bottom-0 left-0 right-0 h-2"
+                            style={{ backgroundColor: GOLD }}
+                        />
+                    </section>
+
+                    {/* Simulator Section */}
+                    <section className="py-16 bg-white">
+                        <div className="max-w-7xl mx-auto px-4">
+                            <div className="text-center mb-12">
+                                <h2 className="text-3xl font-bold mb-3" style={{ color: NAVY }}>
+                                    Simulatore Avanzato
+                                </h2>
+                                <p className="text-gray-600">
+                                    Configura il tuo intervento e scopri gli incentivi in tempo reale
+                                </p>
+                            </div>
+
+                            <div className="grid lg:grid-cols-12 gap-8">
+                                {/* Input Section - 5 columns */}
+                                <div className="lg:col-span-5 space-y-6">
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center space-x-2">
+                                                <Icon name="building-2" size={24} color={NAVY} />
+                                                <span>Tipo di Ente</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <Select
+                                                value={tipoEnte}
+                                                onChange={setTipoEnte}
+                                                placeholder="Seleziona il tipo di ente..."
+                                                options={[
+                                                    { value: "comune_small", label: "Comune < 15.000 abitanti (100%)" },
+                                                    { value: "scuola_sanita", label: "Scuola / Struttura Sanitaria (100%)" },
+                                                    { value: "comune_big", label: "Comune > 15.000 abitanti - Altri edifici (65%)" }
+                                                ]}
+                                            />
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center space-x-2">
+                                                <Icon name="wrench" size={24} color={NAVY} />
+                                                <span>Tipo di Intervento</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <Select
+                                                value={tipoIntervento}
+                                                onChange={setTipoIntervento}
+                                                placeholder="Seleziona il tipo di intervento..."
+                                                options={[
+                                                    { value: "piccolo", label: "PdC < 35kW / Solare < 50mq (Acconto 50%, 2 anni)" },
+                                                    { value: "grande", label: "PdC > 35kW / Cappotto / Infissi / Relamping (Acconto 40%, 5 anni)" }
+                                                ]}
+                                            />
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center space-x-2">
+                                                <Icon name="euro" size={24} color={NAVY} />
+                                                <span>Spesa Ammissibile</span>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <div className="text-center">
+                                                <div className="text-3xl font-bold" style={{ color: GOLD }}>
+                                                    {fmt(spesa)}
+                                                </div>
+                                            </div>
+                                            <Slider
+                                                value={spesa}
+                                                onChange={setSpesa}
+                                                min={50000}
+                                                max={1500000}
+                                                step={10000}
+                                            />
+                                            <div className="flex justify-between text-sm text-gray-500">
+                                                <span>{fmt(50000)}</span>
+                                                <span>{fmt(1500000)}</span>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+
+                                {/* Results Section - 7 columns */}
+                                <div className="lg:col-span-7">
+                                    {!ready ? (
+                                        <Card className="h-full flex items-center justify-center p-12">
+                                            <div className="text-center text-gray-400">
+                                                <Icon name="calculator" size={64} color="#cbd5e1" className="mx-auto mb-4" />
+                                                <p className="text-lg">
+                                                    Seleziona tipo di ente e tipo di intervento per visualizzare i risultati
+                                                </p>
+                                            </div>
+                                        </Card>
+                                    ) : (
+                                        <div className="space-y-6">
+                                            <Card style={{ borderColor: GOLD, borderWidth: 2 }}>
+                                                <CardHeader style={{ backgroundColor: NAVY }}>
+                                                    <CardTitle className="text-white flex items-center justify-between">
+                                                        <span>Incentivo Totale GSE</span>
+                                                        <Icon name="gift" size={24} color={GOLD} />
+                                                    </CardTitle>
+                                                </CardHeader>
+                                                <CardContent className="pt-6">
+                                                    <div className="text-center">
+                                                        <div className="text-5xl font-bold mb-2" style={{ color: GOLD }}>
+                                                            {fmt(incentivoTotale)}
+                                                        </div>
+                                                        <p className="text-gray-600">
+                                                            Aliquota: {(aliquota * 100).toFixed(0)}% • Erogazione: {durata} anni
+                                                        </p>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+
+                                            <Card>
+                                                <CardHeader>
+                                                    <CardTitle className="flex items-center justify-between">
+                                                        <span>Liquidità Immediata (Acconto)</span>
+                                                        <div className="relative group">
+                                                            <Icon name="info" size={20} color="#666" />
+                                                            <div className="absolute hidden group-hover:block right-0 top-6 w-64 p-3 bg-gray-800 text-white text-sm rounded-lg shadow-lg z-10">
+                                                                Acconto GSE erogato a fine lavori, prima della fine dei lavori di efficienza
+                                                            </div>
+                                                        </div>
+                                                    </CardTitle>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <div className="text-center">
+                                                        <div className="text-4xl font-bold mb-2" style={{ color: NAVY }}>
+                                                            {fmt(liquiditaImmediata)}
+                                                        </div>
+                                                        <p className="text-gray-600">
+                                                            {(acconto * 100).toFixed(0)}% erogato a fine lavori
+                                                        </p>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+
+                                            <Card
+                                                style={{
+                                                    borderColor: esborsoNetto === 0 ? '#10b981' : '#ef4444',
+                                                    borderWidth: 2,
+                                                    backgroundColor: esborsoNetto === 0 ? '#f0fdf4' : '#fef2f2'
+                                                }}
+                                            >
+                                                <CardHeader>
+                                                    <CardTitle className="flex items-center justify-between">
+                                                        <span>Esborso Netto Ente</span>
+                                                        {esborsoNetto === 0 && (
+                                                            <Icon name="shield-check" size={24} color="#10b981" />
+                                                        )}
+                                                    </CardTitle>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <div className="text-center">
+                                                        <div
+                                                            className="text-4xl font-bold mb-2"
+                                                            style={{
+                                                                color: esborsoNetto === 0 ? '#10b981' : '#ef4444'
+                                                            }}
+                                                        >
+                                                            {fmt(esborsoNetto)}
+                                                        </div>
+                                                        <p className="text-gray-600">
+                                                            {esborsoNetto === 0
+                                                                ? '🎉 Costo zero per l\'ente!'
+                                                                : 'Costo residuo a carico dell\'ente'
+                                                            }
+                                                        </p>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Approfondimenti Section */}
+                    <section className="py-16 bg-gray-50">
+                        <div className="max-w-7xl mx-auto px-4">
+                            <h2 className="text-3xl font-bold mb-8 text-center" style={{ color: NAVY }}>
+                                Approfondimenti
+                            </h2>
+
+                            <Accordion>
+                                <AccordionItem title="🎁 Vantaggi del Fondo Perduto">
+                                    <div className="space-y-4">
+                                        <p className="text-gray-700">
+                                            Il Conto Termico 3.0 offre incentivi a <strong>fondo perduto</strong>, ovvero contributi che non devono essere restituiti. Questo significa che l'ente beneficiario riceve denaro dal GSE per coprire parte o la totalità della spesa ammissibile, senza alcun obbligo di rimborso.
+                                        </p>
+                                        <ul className="list-disc list-inside space-y-2 text-gray-700">
+                                            <li><strong>Comuni sotto 15.000 abitanti</strong>: aliquota 100%</li>
+                                            <li><strong>Scuole e Strutture Sanitarie</strong>: aliquota 100%</li>
+                                            <li><strong>Altri edifici pubblici</strong>: aliquota 65%</li>
+                                        </ul>
+                                    </div>
+                                </AccordionItem>
+
+                                <AccordionItem title="👥 Soluzioni per il Personale Tecnico">
+                                    <Tabs defaultValue="esco">
+                                        <TabsList>
+                                            <TabsTrigger value="esco">ESCo</TabsTrigger>
+                                            <TabsTrigger value="staff">Staff Dedicato</TabsTrigger>
+                                            <TabsTrigger value="formazione">Formazione</TabsTrigger>
+                                        </TabsList>
+
+                                        <TabsContent value="esco">
+                                            <div className="p-4 bg-white rounded-lg">
+                                                <h4 className="font-bold mb-3" style={{ color: NAVY }}>
+                                                    Energy Service Company (ESCo)
+                                                </h4>
+                                                <p className="text-gray-700 mb-3">
+                                                    ZAGREO offre servizi completi di Energy Service Company per enti che non dispongono di personale tecnico interno:
+                                                </p>
+                                                <ul className="list-disc list-inside space-y-2 text-gray-700">
+                                                    <li>Diagnosi energetica e progettazione</li>
+                                                    <li>Gestione pratiche GSE e burocrazia</li>
+                                                    <li>Direzione lavori e collaudo</li>
+                                                    <li>Monitoraggio prestazioni energetiche</li>
+                                                </ul>
+                                            </div>
+                                        </TabsContent>
+
+                                        <TabsContent value="staff">
+                                            <div className="p-4 bg-white rounded-lg">
+                                                <h4 className="font-bold mb-3" style={{ color: NAVY }}>
+                                                    Supporto con Staff Dedicato
+                                                </h4>
+                                                <p className="text-gray-700 mb-3">
+                                                    Per enti con team tecnico interno, ZAGREO fornisce supporto specialistico:
+                                                </p>
+                                                <ul className="list-disc list-inside space-y-2 text-gray-700">
+                                                    <li>Consulenza normativa e tecnica</li>
+                                                    <li>Affiancamento nella compilazione domande</li>
+                                                    <li>Revisione documentazione tecnica</li>
+                                                    <li>Training on-the-job per il personale interno</li>
+                                                </ul>
+                                            </div>
+                                        </TabsContent>
+
+                                        <TabsContent value="formazione">
+                                            <div className="p-4 bg-white rounded-lg">
+                                                <h4 className="font-bold mb-3" style={{ color: NAVY }}>
+                                                    Percorsi di Formazione
+                                                </h4>
+                                                <p className="text-gray-700 mb-3">
+                                                    Programmi formativi certificati per sviluppare competenze interne:
+                                                </p>
+                                                <ul className="list-disc list-inside space-y-2 text-gray-700">
+                                                    <li>Corso base "Conto Termico 3.0" (8 ore)</li>
+                                                    <li>Workshop avanzato "Progettazione interventi" (16 ore)</li>
+                                                    <li>Masterclass "Gestione pratiche GSE" (12 ore)</li>
+                                                    <li>Certificazione "Energy Manager PA" (40 ore)</li>
+                                                </ul>
+                                            </div>
+                                        </TabsContent>
+                                    </Tabs>
+                                </AccordionItem>
+
+                                <AccordionItem title="✨ Novità del Conto Termico 3.0">
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        <div className="p-4 bg-white rounded-lg border-l-4" style={{ borderLeftColor: GOLD }}>
+                                            <h4 className="font-bold mb-2 flex items-center space-x-2">
+                                                <Icon name="trending-up" size={20} color={GOLD} />
+                                                <span>Aliquote Maggiorate</span>
+                                            </h4>
+                                            <p className="text-sm text-gray-700">
+                                                Fino al 100% per Comuni piccoli e settori strategici (scuole, sanità)
+                                            </p>
+                                        </div>
+
+                                        <div className="p-4 bg-white rounded-lg border-l-4" style={{ borderLeftColor: GOLD }}>
+                                            <h4 className="font-bold mb-2 flex items-center space-x-2">
+                                                <Icon name="clock" size={20} color={GOLD} />
+                                                <span>Acconto Anticipato</span>
+                                            </h4>
+                                            <p className="text-sm text-gray-700">
+                                                Fino al 50% erogato a fine lavori per garantire liquidità immediata
+                                            </p>
+                                        </div>
+
+                                        <div className="p-4 bg-white rounded-lg border-l-4" style={{ borderLeftColor: GOLD }}>
+                                            <h4 className="font-bold mb-2 flex items-center space-x-2">
+                                                <Icon name="file-check" size={20} color={GOLD} />
+                                                <span>Semplificazioni</span>
+                                            </h4>
+                                            <p className="text-sm text-gray-700">
+                                                Procedure burocratiche snellite e portale GSE rinnovato
+                                            </p>
+                                        </div>
+
+                                        <div className="p-4 bg-white rounded-lg border-l-4" style={{ borderLeftColor: GOLD }}>
+                                            <h4 className="font-bold mb-2 flex items-center space-x-2">
+                                                <Icon name="layers" size={20} color={GOLD} />
+                                                <span>Nuovi Interventi</span>
+                                            </h4>
+                                            <p className="text-sm text-gray-700">
+                                                Ammessi relamping LED, sistemi BEMS e soluzioni ibride
+                                            </p>
+                                        </div>
+                                    </div>
+                                </AccordionItem>
+                            </Accordion>
+                        </div>
+                    </section>
+
+                    {/* Bussola Normativa PA Section */}
+                    <section className="py-16 bg-white">
+                        <div className="max-w-7xl mx-auto px-4">
+                            <h2 className="text-3xl font-bold mb-8 text-center" style={{ color: NAVY }}>
+                                🧭 Bussola Normativa PA
+                            </h2>
+
+                            {/* Soggetti Ammessi */}
+                            <div className="mb-12">
+                                <h3 className="text-2xl font-semibold mb-6" style={{ color: NAVY }}>
+                                    Soggetti Ammessi
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                                    {[
+                                        { icon: "building-2", label: "Comuni" },
+                                        { icon: "school", label: "Scuole" },
+                                        { icon: "heart-pulse", label: "Sanità" },
+                                        { icon: "landmark", label: "Province" },
+                                        { icon: "shield", label: "Regioni" }
+                                    ].map((item, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="p-6 bg-gray-50 rounded-lg text-center hover:shadow-md transition-shadow"
+                                        >
+                                            <Icon name={item.icon} size={32} color={NAVY} className="mx-auto mb-3" />
+                                            <p className="font-semibold">{item.label}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Modelli di Gestione */}
+                            <div className="mb-12">
+                                <h3 className="text-2xl font-semibold mb-6" style={{ color: NAVY }}>
+                                    Modelli di Gestione
+                                </h3>
+                                <Tabs defaultValue="esco">
+                                    <TabsList>
+                                        <TabsTrigger value="esco">ESCo</TabsTrigger>
+                                        <TabsTrigger value="ppp">Partenariato Pubblico-Privato</TabsTrigger>
+                                        <TabsTrigger value="cer">Comunità Energetiche</TabsTrigger>
+                                    </TabsList>
+
+                                    <TabsContent value="esco">
+                                        <Card>
+                                            <CardContent className="pt-6">
+                                                <h4 className="font-bold text-lg mb-3">Energy Service Company</h4>
+                                                <p className="text-gray-700 mb-4">
+                                                    L'ESCo si occupa di tutte le fasi dell'intervento, dall'analisi energetica alla realizzazione, garantendo i risultati.
+                                                </p>
+                                                <ul className="list-disc list-inside space-y-2 text-gray-700">
+                                                    <li>Zero investimento iniziale per l'ente</li>
+                                                    <li>Performance garantite contrattualment e</li>
+                                                    <li>Gestione completa pratiche GSE</li>
+                                                    <li>Remunerazione basata sui risparmi ottenuti</li>
+                                                </ul>
+                                            </CardContent>
+                                        </Card>
+                                    </TabsContent>
+
+                                    <TabsContent value="ppp">
+                                        <Card>
+                                            <CardContent className="pt-6">
+                                                <h4 className="font-bold text-lg mb-3">Partenariato Pubblico-Privato (PPP)</h4>
+                                                <p className="text-gray-700 mb-4">
+                                                    Collaborazione strutturata tra ente pubblico e partner privato per progetti complessi.
+                                                </p>
+                                                <ul className="list-disc list-inside space-y-2 text-gray-700">
+                                                    <li>Condivisione rischi e benefici</li>
+                                                    <li>Finanziamento misto pubblico-privato</li>
+                                                    <li>Durata contrattuale medio-lunga (5-20 anni)</li>
+                                                    <li>Ideale per interventi integrati</li>
+                                                </ul>
+                                            </CardContent>
+                                        </Card>
+                                    </TabsContent>
+
+                                    <TabsContent value="cer">
+                                        <Card>
+                                            <CardContent className="pt-6">
+                                                <h4 className="font-bold text-lg mb-3">Comunità Energetiche Rinnovabili (CER)</h4>
+                                                <p className="text-gray-700 mb-4">
+                                                    Aggregazione di cittadini, imprese ed enti pubblici per produrre e condividere energia da fonti rinnovabili.
+                                                </p>
+                                                <ul className="list-disc list-inside space-y-2 text-gray-700">
+                                                    <li>Incentivi cumulabili con Conto Termico</li>
+                                                    <li>Autoconsumo collettivo incentivato</li>
+                                                    <li>Benefici economici e ambientali condivisi</li>
+                                                    <li>Governance democratica</li>
+                                                </ul>
+                                            </CardContent>
+                                        </Card>
+                                    </TabsContent>
+                                </Tabs>
+                            </div>
+
+                            {/* Regole Fiscali e Cumulabilità */}
+                            <div>
+                                <h3 className="text-2xl font-semibold mb-6" style={{ color: NAVY }}>
+                                    Regole Fiscali e Cumulabilità
+                                </h3>
+                                <Accordion>
+                                    <AccordionItem title="💰 Trattamento Fiscale Incentivi">
+                                        <p className="text-gray-700 mb-3">
+                                            Gli incentivi del Conto Termico non concorrono alla formazione del reddito imponibile ai fini IRES/IRPEF per gli enti pubblici, rappresentando un contributo in conto capitale.
+                                        </p>
+                                        <div className="p-4 bg-blue-50 rounded-lg">
+                                            <p className="text-sm font-semibold mb-2">⚖️ Base normativa:</p>
+                                            <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                                                <li>D.M. 16 febbraio 2016 (Conto Termico 2.0)</li>
+                                                <li>Circolare Agenzia delle Entrate n. 36/E del 2013</li>
+                                                <li>D.M. 7 agosto 2025 (Conto Termico 3.0) - Art. 12</li>
+                                            </ul>
+                                        </div>
+                                    </AccordionItem>
+
+                                    <AccordionItem title="🔗 Cumulabilità con Altri Incentivi">
+                                        <div className="space-y-4">
+                                            <div className="p-4 bg-green-50 rounded-lg border-l-4 border-green-500">
+                                                <h5 className="font-bold text-green-800 mb-2">✅ CUMULABILE CON:</h5>
+                                                <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                                                    <li>Certificati Bianchi (TEE) - con limitazioni sulla spesa ammissibile</li>
+                                                    <li>Contributi CER (Comunità Energetiche Rinnovabili)</li>
+                                                    <li>Fondi strutturali europei (FESR, FSE+)</li>
+                                                    <li>Fondi regionali e locali dedicati</li>
+                                                </ul>
+                                            </div>
+
+                                            <div className="p-4 bg-red-50 rounded-lg border-l-4 border-red-500">
+                                                <h5 className="font-bold text-red-800 mb-2">❌ NON CUMULABILE CON:</h5>
+                                                <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                                                    <li>Superbonus 110% (abrogato per PA)</li>
+                                                    <li>Ecobonus tradizionale (detrazioni fiscali)</li>
+                                                    <li>Altri incentivi GSE sullo stesso intervento</li>
+                                                </ul>
+                                            </div>
+
+                                            <div className="p-4 bg-yellow-50 rounded-lg">
+                                                <p className="text-sm text-gray-700">
+                                                    <strong>⚠️ Attenzione:</strong> In caso di cumulo, la somma degli incentivi non può superare il 100% della spesa ammissibile. È obbligatorio comunicare al GSE eventuali altri contributi ricevuti.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </AccordionItem>
+
+                                    <AccordionItem title="📋 IVA e Spese Ammissibili">
+                                        <div className="space-y-3">
+                                            <p className="text-gray-700">
+                                                Per gli enti pubblici, il trattamento IVA dipende dal regime fiscale applicabile:
+                                            </p>
+
+                                            <div className="grid md:grid-cols-2 gap-4">
+                                                <div className="p-4 bg-gray-50 rounded-lg">
+                                                    <h5 className="font-bold mb-2">IVA Detraibile</h5>
+                                                    <p className="text-sm text-gray-700">
+                                                        Se l'ente può detrarre l'IVA, la spesa ammissibile è al <strong>netto IVA</strong>.
+                                                    </p>
+                                                </div>
+
+                                                <div className="p-4 bg-gray-50 rounded-lg">
+                                                    <h5 className="font-bold mb-2">IVA Indetraibile</h5>
+                                                    <p className="text-sm text-gray-700">
+                                                        Se l'IVA non è detraibile, la spesa ammissibile è <strong>IVA inclusa</strong>.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-4 bg-blue-50 rounded-lg">
+                                                <p className="text-sm">
+                                                    💡 <strong>Consiglio pratico:</strong> Verificare preventivamente il regime IVA applicabile con il proprio ufficio ragioneria per ottimizzare l'importo dell'incentivo richiesto.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </AccordionItem>
+                                </Accordion>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* CTA Section */}
+                    <section
+                        className="py-16 text-white"
+                        style={{
+                            background: `linear-gradient(135deg, ${NAVY} 0%, #1a2f5a 100%)`
+                        }}
+                    >
+                        <div className="max-w-4xl mx-auto px-4 text-center">
+                            <h2 className="text-4xl font-bold mb-4">
+                                Pronto a Partire?
+                            </h2>
+                            <p className="text-xl mb-8 opacity-90">
+                                Richiedi una pre-analisi gratuita del tuo progetto di efficienza energetica
+                            </p>
+                            <Button
+                                className="text-lg shadow-xl hover:shadow-2xl"
+                                style={{
+                                    backgroundColor: GOLD,
+                                    color: NAVY
+                                }}
+                            >
+                                <Icon name="mail" size={24} color={NAVY} className="mr-2 inline" />
+                                Richiedi Pre-Analisi Gratuita
+                            </Button>
+                        </div>
+                    </section>
+
+                    {/* Footer */}
+                    <footer className="bg-gray-900 text-gray-400 py-8">
+                        <div className="max-w-7xl mx-auto px-4 text-center">
+                            <p className="text-sm mb-2">
+                                <strong>Disclaimer:</strong> I risultati del simulatore sono puramente indicativi. Per valutazioni ufficiali è necessaria un'analisi tecnica dettagliata.
+                            </p>
+                            <p className="text-sm">
+                                © 2025 ZAGREO - Efficienza Energetica PA • Tutti i diritti riservati
+                            </p>
+                            <p className="text-xs mt-2 opacity-75">
+                                Dati normativi aggiornati al D.M. 7 agosto 2025 (Conto Termico 3.0)
+                            </p>
+                        </div>
+                    </footer>
+
+                    {/* Floating Chat Widget */}
+                    <FloatingChatWidget />
+                </div>
+            );
+        };
+
+        // Render App
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+
+        // Initialize Lucide icons after render
+        setTimeout(() => {
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
+        }, 100);
+    </script>
+</body>
+
+</html>
